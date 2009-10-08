@@ -15,7 +15,7 @@ class TicketServerController < ApplicationController
       # redmine objects
       project = Project.find_by_identifier(redmine_params[:project])
       tracker = project.trackers.find_by_name(redmine_params[:tracker])
-      author = User.anonymous
+      author = User.find_by_login(redmine_params[:author]) || User.anonymous
 
       # error class and message
       error_class = notice['error_class']
@@ -30,7 +30,6 @@ class TicketServerController < ApplicationController
       
       # build description including a link to source repository
       repo_root = project.custom_value_for(@repository_root_field).value.gsub(/\/$/,'') rescue nil
-      description = "Redmine Notifier reported an Error "
 
       issue = Issue.find_or_initialize_by_subject_and_project_id_and_tracker_id_and_author_id(
         subject,
@@ -63,11 +62,9 @@ class TicketServerController < ApplicationController
       value.value = (value.value.to_i + 1).to_s
       logger.error value.value
       value.save!
-
       # update journal
       journal = issue.init_journal(
-        author, 
-        "h4. Foo"
+        author, redmine_params[:description]
       )
 
       # reopen issue
@@ -85,7 +82,7 @@ class TicketServerController < ApplicationController
       
       render :status => 200, :text => "Received bug report. Created/updated issue #{issue.id}."
     else
-      logger.info 'Unauthorized Hoptoad API request.'
+      logger.info 'Unauthorized Redmine API request.'
       render :status => 403, :text => 'You provided a wrong or no Redmine API key.'
     end
   end
