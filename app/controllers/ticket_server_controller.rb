@@ -1,15 +1,42 @@
 class TicketServerController < ApplicationController
 
-  before_filter :check_if_login_required, :except => 'index'
+  before_filter :check_if_login_required, :except => [:index, :issue_status, :projects, :issues]
   before_filter :find_or_create_custom_fields
 
   unloadable  
 
+  def issue_status
+    if authorized? params
+      id = params[:issue_id]
+      if id
+        issue = Issue.find(id.to_i)
+        if issue
+          render :status => 200, :text => issue.status.name
+        else
+          render :status => 404, :text => 'Issue not found'
+        end
+      else
+        render :status => 200, :text => IssueStatus.find(:all).to_json
+      end
+    end
+  end
+
+  def projects
+    if authorized?(params)
+      render :status => 200, :text => Project.find(:all).to_json
+    end
+  end
+
+  def issues
+    if authorized? params
+      issues = Issue.find :all
+      render :status => 200, :text => issues.to_json
+    end
+  end
+
   def index
     notice = YAML.load(request.raw_post)['ticket']
     redmine_params = YAML.load(notice['params'])
-    require 'pp'
-    pp redmine_params
     
     if authorized = Setting.mail_handler_api_key == redmine_params[:api_key]
       # redmine objects
@@ -68,9 +95,9 @@ class TicketServerController < ApplicationController
       )
 
       # reopen issue
-      if issue.status.blank? or issue.status.is_closed?                                                                                                        
-        issue.status = IssueStatus.find(:first, :conditions => {:is_default => true}, :order => 'position ASC')
-      end
+      #if issue.status.blank? or issue.status.is_closed?                                                                                                        
+      #  issue.status = IssueStatus.find(:first, :conditions => {:is_default => true}, :order => 'position ASC')
+      #end
 
       issue.save!
 
@@ -80,7 +107,7 @@ class TicketServerController < ApplicationController
         Mailer.deliver_issue_edit(journal) if Setting.notified_events.include?('issue_updated')
       end
       
-      render :status => 200, :text => "Received bug report. Created/updated issue #{issue.id}."
+      render :status => 200, :text => "#{issue.id}"
     else
       logger.info 'Unauthorized Redmine API request.'
       render :status => 403, :text => 'You provided a wrong or no Redmine API key.'
@@ -114,5 +141,16 @@ class TicketServerController < ApplicationController
       @repository_root_field.save(false)
     end
 
+  end
+
+  def authorized?(params)
+    if params[:api_key] == Setting.mail_handler_api_key
+      authorized = true
+      return true
+    else
+      logger.info 'Unauthorized Redmine API request.'
+      render :status => 403, :text => 'You provided a wrong or no Redmine API key.'
+    end
+    false
   end
 end
