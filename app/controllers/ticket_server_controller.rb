@@ -1,15 +1,31 @@
 class TicketServerController < ApplicationController
 
-  before_filter :check_if_login_required, :except => [:index, :issue_status, :projects, :issues]
+  before_filter :check_if_login_required, :except => [:journals, :index, :issue_status, :projects, :issues]
   before_filter :find_or_create_custom_fields
 
   unloadable  
+
+  def journals
+    if authorized? params
+      id = params[:issue_id]
+      if id
+        issue = Issue.find(id.to_i)
+        if issue
+          render :status => 200, :text => issue.journals.to_json
+        else
+          render :status => 404, :text => 'Issue not found'
+        end
+      else
+        render :status => 200, :text => Journal.find(:all).to_json
+      end
+    end
+  end
 
   def issue_status
     if authorized? params
       id = params[:issue_id]
       if id
-        issue = Issue.find(id.to_i)
+e       issue = Issue.find(id.to_i)
         if issue
           render :status => 200, :text => issue.status.name
         else
@@ -37,6 +53,11 @@ class TicketServerController < ApplicationController
   def index
     notice = YAML.load(request.raw_post)['ticket']
     redmine_params = YAML.load(notice['params'])
+    custom_fields = redmine_params[:custom_fields] 
+    if not custom_fields.is_a?(Hash)
+      logger.error "REDMINE TICKET SERVER: issue custom fields not valid, skipping"
+      custom_fields = {}
+    end
     
     if authorized = Setting.mail_handler_api_key == redmine_params[:api_key]
       # redmine objects
@@ -55,9 +76,6 @@ class TicketServerController < ApplicationController
       subject = redmine_params[:subject] || 'no subject'
       description = redmine_params[:description] || 'no description'
       
-      # build description including a link to source repository
-      repo_root = project.custom_value_for(@repository_root_field).value.gsub(/\/$/,'') rescue nil
-
       issue = Issue.find_or_initialize_by_subject_and_project_id_and_tracker_id_and_author_id(
         subject,
         project.id,
@@ -71,24 +89,19 @@ class TicketServerController < ApplicationController
         issue.assigned_to = User.find_by_login(redmine_params[:assigned_to]) unless redmine_params[:assigned_to].blank?
         issue.priority_id = redmine_params[:priority] unless redmine_params[:priority].blank?
         issue.description = description
-
-        # make sure that custom fields are associated to this project and tracker
-        project.issue_custom_fields << @error_class_field unless project.issue_custom_fields.include?(@error_class_field)
-        tracker.custom_fields << @error_class_field unless tracker.custom_fields.include?(@error_class_field)
-        project.issue_custom_fields << @occurences_field unless project.issue_custom_fields.include?(@occurences_field)
-        tracker.custom_fields << @occurences_field unless tracker.custom_fields.include?(@occurences_field)
-        
-        # set custom field error class
-        issue.custom_values.build(:custom_field => @error_class_field, :value => error_class)
       end
 
       issue.save!
 
-      # increment occurences custom field
-      value = issue.custom_value_for(@occurences_field) || issue.custom_values.build(:custom_field => @occurences_field, :value => 0)
-      value.value = (value.value.to_i + 1).to_s
-      logger.error value.value
-      value.save!
+      custom_fields.each do |k,v|
+        f = IssueCustomField.find_or_initialize_by_name(k.to_s)
+        project.issue_custom_fields << f unless project.issue_custom_fields.include?(f)
+        tracker.custom_fields << f unless tracker.custom_fields.include?(f)
+        cf = issue.custom_value_for(f) || issue.custom_values.build(:custom_field => f, :value => 0)
+        cf.value = v
+        cf.save!
+      end
+      
       # update journal
       journal = issue.init_journal(
         author, redmine_params[:description]
@@ -115,35 +128,25 @@ class TicketServerController < ApplicationController
   end
   
   protected
-  
+
+
   def find_or_create_custom_fields
-    @error_class_field = IssueCustomField.find_or_initialize_by_name('Error class')
-    if @error_class_field.new_record?
-      @error_class_field.attributes = {:field_format => 'string', :searchable => true, :is_filter => true}
-      @error_class_field.save(false)
-    end
+    notice = YAML.load(request.raw_post)['ticket']
+    redmine_params = YAML.load(notice['params'])
+    custom_fields = redmine_params[:custom_fields] 
 
-    @occurences_field = IssueCustomField.find_or_initialize_by_name('# Occurences')
-    if @occurences_field.new_record?
-      @occurences_field.attributes = {:field_format => 'int', :default_value => '0', :is_filter => true}
-      @occurences_field.save(false)
-    end
+    custom_fields.each do |key,val|
+      f = IssueCustomField.find_or_initialize_by_name(key.to_s)
+      if f.new_record?
+        logger.info "REDMINE_TICKET_SERVER: Creating custom field #{key}"
+        f.attributes = {:field_format => 'string', :searchable => true}
+        f.save(false)
+      end
 
-    @trace_filter_field = ProjectCustomField.find_or_initialize_by_name('Backtrace filter')
-    if @trace_filter_field.new_record?
-      @trace_filter_field.attributes = {:field_format => 'text'}
-      @trace_filter_field.save(false)
     end
-
-    @repository_root_field = ProjectCustomField.find_or_initialize_by_name('Repository root')
-    if @repository_root_field.new_record?
-      @repository_root_field.attributes = {:field_format => 'string'}
-      @repository_root_field.save(false)
-    end
-
   end
-
-  def authorized?(params)
+  
+    def authorized?(params)
     if params[:api_key] == Setting.mail_handler_api_key
       authorized = true
       return true
