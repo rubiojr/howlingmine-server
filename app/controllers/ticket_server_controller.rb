@@ -25,7 +25,7 @@ class TicketServerController < ApplicationController
     if authorized? params
       id = params[:issue_id]
       if id
-e       issue = Issue.find(id.to_i)
+         issue = Issue.find(id.to_i)
         if issue
           render :status => 200, :text => issue.status.name
         else
@@ -131,18 +131,20 @@ e       issue = Issue.find(id.to_i)
 
 
   def find_or_create_custom_fields
-    notice = YAML.load(request.raw_post)['ticket']
-    redmine_params = YAML.load(notice['params'])
-    custom_fields = redmine_params[:custom_fields] 
+    if request.path =~ /index|new_ticket/
+      notice = YAML.load(request.raw_post)['ticket']
+      redmine_params = YAML.load(notice['params'])
+      custom_fields = redmine_params[:custom_fields] 
 
-    custom_fields.each do |key,val|
-      f = IssueCustomField.find_or_initialize_by_name(key.to_s)
-      if f.new_record?
-        logger.info "REDMINE_TICKET_SERVER: Creating custom field #{key}"
-        f.attributes = {:field_format => 'string', :searchable => true}
-        f.save(false)
+      custom_fields.each do |key,val|
+        f = IssueCustomField.find_or_initialize_by_name(key.to_s)
+        if f.new_record?
+          logger.info "REDMINE_TICKET_SERVER: Creating custom field #{key}"
+          f.attributes = {:field_format => 'string', :searchable => true}
+          f.save(false)
+        end
+
       end
-
     end
   end
   
