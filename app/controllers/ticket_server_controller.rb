@@ -1,6 +1,6 @@
 class TicketServerController < ApplicationController
 
-  before_filter :check_if_login_required, :except => [:journals, :index, :issue_status, :projects, :issues]
+  before_filter :check_if_login_required, :except => [:journals, :new_issue, :issue_status, :projects, :issues]
   before_filter :find_or_create_custom_fields
 
   unloadable  
@@ -16,6 +16,8 @@ class TicketServerController < ApplicationController
           render :status => 404, :text => 'Issue not found'
         end
       else
+        logger.debug "REDMINE_TICKET_SERVER: issue_id not found in params," +
+                      "returning all Journals"
         render :status => 200, :text => Journal.find(:all).to_json
       end
     end
@@ -32,6 +34,8 @@ class TicketServerController < ApplicationController
           render :status => 404, :text => 'Issue not found'
         end
       else
+        logger.debug "REDMINE_TICKET_SERVER: issue_id not found," +
+                     "returning all the issue status"
         render :status => 200, :text => IssueStatus.find(:all).to_json
       end
     end
@@ -50,29 +54,22 @@ class TicketServerController < ApplicationController
     end
   end
 
-  def index
-    notice = YAML.load(request.raw_post)['ticket']
-    redmine_params = YAML.load(notice['params'])
-    custom_fields = redmine_params[:custom_fields] 
+  def new_issue
+    redmine_params = params
+    logger.debug "REDMINE_TICKET_SERVER: New issue params #{params.inspect}"
+    custom_fields = YAML.load(redmine_params[:custom_fields]) rescue nil
+    
     if not custom_fields.is_a?(Hash)
-      logger.error "REDMINE TICKET SERVER: issue custom fields not valid, skipping"
+      logger.error "REDMINE_TICKET_SERVER: issue custom fields not valid"
       custom_fields = {}
     end
     
-    if authorized = Setting.mail_handler_api_key == redmine_params[:api_key]
+    if authorized?(params)
       # redmine objects
       project = Project.find_by_identifier(redmine_params[:project])
       tracker = project.trackers.find_by_name(redmine_params[:tracker])
       author = User.find_by_login(redmine_params[:author]) || User.anonymous
 
-      # error class and message
-      error_class = notice['error_class']
-      error_message = notice['error_message']
-
-      # build filtered backtrace
-      backtrace = notice['back'].blank? ? notice['backtrace'] : notice['back']
-      
-      # build subject by removing method name and '[RAILS_ROOT]', make sure it fits in a varchar
       subject = redmine_params[:subject] || 'no subject'
       description = redmine_params[:description] || 'no description'
       
@@ -128,13 +125,10 @@ class TicketServerController < ApplicationController
   end
   
   protected
-
-
   def find_or_create_custom_fields
     begin
-      notice = YAML.load(request.raw_post)['ticket']
-      redmine_params = YAML.load(notice['params'])
-      custom_fields = redmine_params[:custom_fields] 
+      redmine_params = params
+      custom_fields = YAML.load(redmine_params[:custom_fields])
 
       custom_fields.each do |key,val|
         f = IssueCustomField.find_or_initialize_by_name(key.to_s)
@@ -153,12 +147,12 @@ class TicketServerController < ApplicationController
     end
   end
   
-    def authorized?(params)
+  def authorized?(params)
     if params[:api_key] == Setting.mail_handler_api_key
       authorized = true
       return true
     else
-      logger.info 'Unauthorized Redmine API request.'
+      logger.info 'REDMINE_TICKET_SERVER: Unauthorized Redmine API request.'
       render :status => 403, :text => 'You provided a wrong or no Redmine API key.'
     end
     false
