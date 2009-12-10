@@ -131,7 +131,7 @@ class TicketServerController < ApplicationController
 
 
   def find_or_create_custom_fields
-    if request.path =~ /index|new_ticket/
+    begin
       notice = YAML.load(request.raw_post)['ticket']
       redmine_params = YAML.load(notice['params'])
       custom_fields = redmine_params[:custom_fields] 
@@ -145,6 +145,11 @@ class TicketServerController < ApplicationController
         end
 
       end
+    rescue Exception => e
+      logger.error "REDMINE_TICKET_SERVER: Could not create custom field:\n\n" +
+                    "Request PATH: #{request.path}\n\n" +
+                    "RAW POST: #{request.raw_post}"
+      logger.error e.message
     end
   end
   
