@@ -1,4 +1,5 @@
 class TicketServerController < ApplicationController
+  require 'json'
 
   before_filter :check_if_login_required, :except => [:journals, :new_issue, :issue_status, :projects, :issues]
   before_filter :find_or_create_custom_fields
@@ -49,7 +50,11 @@ class TicketServerController < ApplicationController
 
   def issues
     if authorized? params
-      issues = Issue.find :all
+      issues = (Issue.find :all).map { |i| 
+        ihash = JSON.parse(i.to_json)
+        ihash[:custom_fields] = i.available_custom_fields
+        ihash 
+      }      
       render :status => 200, :text => issues.to_json
     end
   end
