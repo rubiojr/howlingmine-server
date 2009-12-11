@@ -51,8 +51,12 @@ class TicketServerController < ApplicationController
   def issues
     if authorized? params
       issues = (Issue.find :all).map { |i| 
+        cfields = {}
+        i.available_custom_fields.each do |cf|
+          cfields[cf.name] = i.custom_value_for cf.id
+        end
         ihash = JSON.parse(i.to_json)
-        ihash[:custom_fields] = i.available_custom_fields
+        ihash[:custom_fields] = cfields
         ihash 
       }      
       render :status => 200, :text => issues.to_json
