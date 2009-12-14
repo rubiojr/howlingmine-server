@@ -1,9 +1,10 @@
-class TicketServerController < ApplicationController
+class HowlingMineController < ApplicationController
   require 'json'
 
   before_filter :check_if_login_required, :except => [:journals, :new_issue, :issue_status, :projects, :issues]
+  skip_before_filter :verify_authenticity_token
   before_filter :find_or_create_custom_fields
-
+  
   unloadable  
 
   def journals
@@ -17,7 +18,7 @@ class TicketServerController < ApplicationController
           render :status => 404, :text => 'Issue not found'
         end
       else
-        logger.debug "REDMINE_TICKET_SERVER: issue_id not found in params," +
+        logger.debug "HOWLING_MINE: issue_id not found in params," +
                       "returning all Journals"
         render :status => 200, :text => Journal.find(:all).to_json
       end
@@ -35,7 +36,7 @@ class TicketServerController < ApplicationController
           render :status => 404, :text => 'Issue not found'
         end
       else
-        logger.debug "REDMINE_TICKET_SERVER: issue_id not found," +
+        logger.debug "HOWLING_MINE: issue_id not found," +
                      "returning all the issue status"
         render :status => 200, :text => IssueStatus.find(:all).to_json
       end
@@ -65,18 +66,33 @@ class TicketServerController < ApplicationController
 
   def new_issue
     redmine_params = params
-    logger.debug "REDMINE_TICKET_SERVER: New issue params #{params.inspect}"
+    logger.debug "HOWLING_MINE: New issue params #{params.inspect}"
     custom_fields = YAML.load(redmine_params[:custom_fields]) rescue nil
     
     if not custom_fields.is_a?(Hash)
-      logger.error "REDMINE_TICKET_SERVER: issue custom fields not valid"
+      logger.error "HOWLING_MINE: issue custom fields not valid"
       custom_fields = {}
     end
     
     if authorized?(params)
       # redmine objects
+      if params[:project].nil? or params[:tracker].nil?
+        logger.error "HOWLING_MINE: project or tracker params nil"
+        render :status => 400, :text => 'Invalid project/tracker params'
+        return
+      end
       project = Project.find_by_identifier(redmine_params[:project])
+      if project.nil?
+        logger.error "HOWLING_MINE: project #{params[:project]} not found"
+        render :status => 400, :text => "Project #{params[:project]} not found"
+        return
+      end
       tracker = project.trackers.find_by_name(redmine_params[:tracker])
+      if tracker.nil?
+        logger.error "HOWLING_MINE: tracker #{params[:tracker]} not found"
+        render :status => 400, :text => "Tracker #{params[:tracker]} not found"
+        return
+      end
       author = User.find_by_login(redmine_params[:author]) || User.anonymous
 
       subject = redmine_params[:subject] || 'no subject'
@@ -142,14 +158,14 @@ class TicketServerController < ApplicationController
       custom_fields.each do |key,val|
         f = IssueCustomField.find_or_initialize_by_name(key.to_s)
         if f.new_record?
-          logger.info "REDMINE_TICKET_SERVER: Creating custom field #{key}"
+          logger.info "HOWLING_MINE: Creating custom field #{key}"
           f.attributes = {:field_format => 'string', :searchable => true}
           f.save(false)
         end
 
       end
     rescue Exception => e
-      logger.error "REDMINE_TICKET_SERVER: Could not create custom field:\n\n" +
+      logger.error "HOWLING_MINE: Could not create custom field:\n\n" +
                     "Request PATH: #{request.path}\n\n" +
                     "RAW POST: #{request.raw_post}"
       logger.error e.message
@@ -161,7 +177,7 @@ class TicketServerController < ApplicationController
       authorized = true
       return true
     else
-      logger.info 'REDMINE_TICKET_SERVER: Unauthorized Redmine API request.'
+      logger.error 'HOWLING_MINE: Unauthorized Redmine API request.'
       render :status => 403, :text => 'You provided a wrong or no Redmine API key.'
     end
     false
