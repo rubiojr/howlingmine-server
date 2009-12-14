@@ -1,4 +1,4 @@
-= Redmine Ticket Server
+= Howling Mine Server
 
 == Installation & Configuration
 
