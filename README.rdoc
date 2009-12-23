@@ -2,7 +2,10 @@
 
 == Installation & Configuration
 
+Download the zip/tarball from http://github.com/rubiojr/howlingmine-server/downloads
+
 Just install the Plugin following the general Redmine plugin installation instructions at http://www.redmine.org/wiki/redmine/Plugins.
+
 
 Then, go to Administration -> Settings -> Incoming emails in your Redmine and generate an API key.
 
