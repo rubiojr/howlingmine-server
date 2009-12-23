@@ -1,0 +1,4 @@
+=== 0.2.1 / 2009-12-23
+ * added plugin_version action to the controller
+ * Added count_issues to the controller
+ * Added count_projects to the controller

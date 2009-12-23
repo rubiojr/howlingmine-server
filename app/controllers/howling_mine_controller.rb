@@ -42,6 +42,10 @@ class HowlingMineController < ApplicationController
       end
     end
   end
+  
+  def plugin_version
+    render :status => 200, :text => (Redmine::Plugin.find :howlingmine_server).version.to_json
+  end
 
   def projects
     if authorized?(params)
@@ -49,6 +53,18 @@ class HowlingMineController < ApplicationController
     end
   end
 
+  def count_issues
+    if authorized?(params)
+      render :status => 200, :text => Issue.count.to_json
+    end
+  end
+  
+  def count_projects
+    if authorized?(params)
+      render :status => 200, :text => Project.count.to_json
+    end
+  end
+  
   def inject_custom_fields(issues)
     if issues.is_a? Array
       issues.map do |i|
