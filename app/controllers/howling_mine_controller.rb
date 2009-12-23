@@ -49,7 +49,61 @@ class HowlingMineController < ApplicationController
     end
   end
 
-  def issues
+  def inject_custom_fields(issues)
+    if issues.is_a? Array
+      issues.map do |i|
+        cfields = {}
+        i.available_custom_fields.each do |cf|
+          cfields[cf.name] = i.custom_value_for cf.id
+        end
+        ihash = JSON.parse(i.to_json)
+        ihash[:custom_fields] = cfields
+        ihash
+      end
+    else
+      cfields = {}
+      issues.available_custom_fields.each do |cf|
+        cfields[cf.name] = issues.custom_value_for cf.id
+      end
+      ihash = JSON.parse(issues.to_json)
+      ihash[:custom_fields] = cfields
+      ihash
+    end
+  end
+  
+  def find
+    method = (params[:method] || 'all')
+    logger.info "HOWLING_MINE: find method, #{params.inspect}"
+    m = Integer(method) rescue method.to_sym
+    if m.is_a? Integer
+      logger.info "HOWLING_MINE: finding by record ID #{m}"
+      issue = Issue.find(m)
+      if not issue
+        render :status => 404, :text => 'Issue not found'
+        logger.info "HOWLING_MINE: issue #{m} not found"
+      else
+        inject_custom_fields(issue).to_json
+        render :status => 200, :text => inject_custom_fields(issue).to_json
+      end
+    else
+      p = {}
+      offset = params[:offset]
+      if offset
+        p[:offset] = offset
+      end
+
+      limit = params[:limit]
+      if limit
+        p[:limit] = limit
+      end
+
+      issues = Issue.find(m, p)
+      issues = inject_custom_fields(issues)
+      render :status => 200, :text => issues.to_json
+    end
+  end
+  
+  def issues 
     if authorized? params
       issues = (Issue.find :all).map { |i| 
         cfields = {}
@@ -160,7 +214,11 @@ class HowlingMineController < ApplicationController
         if f.new_record?
           logger.info "HOWLING_MINE: Creating custom field #{key}"
           f.attributes = {:field_format => 'string', :searchable => true}
-          f.save(false)
+          if f.save(false)
+            logger.info "HOWLING_MINE: custom field #{key} created!"
+          else
+            logger.error "HOWLING_MINE: Error creating custom field #{key}"
+          end
         end
 
       end
