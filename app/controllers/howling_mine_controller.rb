@@ -2,9 +2,7 @@ class HowlingMineController < ApplicationController
   require 'json'
 
   before_filter :check_if_login_required, :except => [:journals, :new_issue, :issue_status, :projects, :issues]
-  skip_before_filter :verify_authenticity_token
-  before_filter :find_or_create_custom_fields
-  
+  skip_before_filter :verify_authenticity_token  
   unloadable  
 
   def journals
@@ -134,17 +132,17 @@ class HowlingMineController < ApplicationController
     end
   end
 
-  def new_issue
-    redmine_params = params
-    logger.debug "HOWLING_MINE: New issue params #{params.inspect}"
-    custom_fields = YAML.load(redmine_params[:custom_fields]) rescue nil
-    
-    if not custom_fields.is_a?(Hash)
-      logger.error "HOWLING_MINE: issue custom fields not valid"
-      custom_fields = {}
-    end
-    
+  def new_issue    
     if authorized?(params)
+      find_or_create_custom_fields
+      redmine_params = params
+      logger.debug "HOWLING_MINE: New issue params #{params.inspect}"
+      custom_fields = YAML.load(redmine_params[:custom_fields]) rescue nil
+
+      if not custom_fields.is_a?(Hash)
+        logger.error "HOWLING_MINE: issue custom fields not valid"
+        custom_fields = {}
+      end
       # redmine objects
       if params[:project].nil? or params[:tracker].nil?
         logger.error "HOWLING_MINE: project or tracker params nil"
