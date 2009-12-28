@@ -16,9 +16,8 @@ class HowlingMineController < ApplicationController
         render :status => 404, :text => 'Issue not found'
       end
     else
-      logger.debug "HOWLING_MINE: issue_id not found in params," +
-                    "returning all Journals"
-      render :status => 200, :text => Journal.find(:all).to_json
+      logger.debug "HOWLING_MINE: issue_id not provided"
+      render :status => 400 , :text => 'Invalid issue_id'
     end
   end
 
@@ -32,9 +31,8 @@ class HowlingMineController < ApplicationController
         render :status => 404, :text => 'Issue not found'
       end
     else
-      logger.debug "HOWLING_MINE: issue_id not found," +
-                   "returning all the issue status"
-      render :status => 200, :text => IssueStatus.find(:all).to_json
+      logger.debug "HOWLING_MINE: issue_id not provided"
+      render :status => 400 , :text => 'Invalid issue_id'
     end
   end
   
@@ -47,11 +45,11 @@ class HowlingMineController < ApplicationController
   end
 
   def count_issues
-    render :status => 200, :text => Issue.count.to_json
+    render :status => 200, :text => Issue.count
   end
   
   def count_projects
-    render :status => 200, :text => Project.count.to_json
+    render :status => 200, :text => Project.count
   end
   
   def find
