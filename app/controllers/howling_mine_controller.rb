@@ -54,28 +54,6 @@ class HowlingMineController < ApplicationController
     render :status => 200, :text => Project.count.to_json
   end
   
-  def inject_custom_fields(issues)
-    if issues.is_a? Array
-      issues.map do |i|
-        cfields = {}
-        i.available_custom_fields.each do |cf|
-          cfields[cf.name] = i.custom_value_for cf.id
-        end
-        ihash = JSON.parse(i.to_json)
-        ihash[:custom_fields] = cfields
-        ihash
-      end
-    else
-      cfields = {}
-      issues.available_custom_fields.each do |cf|
-        cfields[cf.name] = issues.custom_value_for cf.id
-      end
-      ihash = JSON.parse(issues.to_json)
-      ihash[:custom_fields] = cfields
-      ihash
-    end
-  end
-  
   def find
     method = (params[:method] || 'all')
     logger.info "HOWLING_MINE: find method, #{params.inspect}"
@@ -237,6 +215,28 @@ class HowlingMineController < ApplicationController
       render :status => 403, :text => 'You provided a wrong or no Redmine API key.'
     end
     false
+  end
+  
+  def inject_custom_fields(issues)
+    if issues.is_a? Array
+      issues.map do |i|
+        cfields = {}
+        i.available_custom_fields.each do |cf|
+          cfields[cf.name] = i.custom_value_for cf.id
+        end
+        ihash = JSON.parse(i.to_json)
+        ihash[:custom_fields] = cfields
+        ihash
+      end
+    else
+      cfields = {}
+      issues.available_custom_fields.each do |cf|
+        cfields[cf.name] = issues.custom_value_for cf.id
+      end
+      ihash = JSON.parse(issues.to_json)
+      ihash[:custom_fields] = cfields
+      ihash
+    end
   end
 
 end
